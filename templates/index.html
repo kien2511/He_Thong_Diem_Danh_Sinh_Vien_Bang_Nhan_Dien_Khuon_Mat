@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Điểm danh AI</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .sidebar { min-height: 100vh; background-color: #343a40; color: #fff; padding-top: 20px; }
+        .sidebar a { color: #c2c7d0; text-decoration: none; padding: 15px; display: block; transition: 0.2s;}
+        .sidebar a:hover, .sidebar a.active { background-color: #007bff; color: white; border-radius: 5px; margin: 0 10px;}
+        .content-area { padding: 30px; }
+        .card { box-shadow: 0 0 1px rgba(0,0,0,.125), 0 1px 3px rgba(0,0,0,.2); border: none; border-radius: 10px; margin-bottom: 20px; }
+        .card-header { background-color: transparent; border-bottom: 1px solid rgba(0,0,0,.125); font-weight: bold; }
+        .video-container { width: 100%; max-width: 640px; margin: auto; background: #000; border-radius: 10px; overflow: hidden; position: relative; min-height: 480px;}
+        .video-container img { width: 100%; height: auto; display: block; }
+        .video-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center; }
+        .stat-card { transition: transform .3s; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .bg-gradient-primary { background: linear-gradient(45deg, #007bff, #0056b3) !important; color: white; }
+        .bg-gradient-success { background: linear-gradient(45deg, #28a745, #1e7e34) !important; color: white; }
+        
+        /* Loading spinner */
+        .spinner-border { display: none; }
+        .is-loading .spinner-border { display: inline-block; }
+        .is-loading .btn-text { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-2 sidebar shadow">
+            <h4 class="text-center mb-4"><i class="fa-solid fa-face-viewfinder text-primary"></i> Smart Attendance</h4>
+            <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                <a class="nav-link active" id="v-pills-dashboard-tab" data-bs-toggle="pill" href="#v-pills-dashboard"><i class="fa-solid fa-chart-pie me-2"></i> Dashboard</a>
+                <a class="nav-link" id="v-pills-camera-tab" data-bs-toggle="pill" href="#v-pills-camera"><i class="fa-solid fa-camera me-2"></i> Camera & Điểm danh</a>
+                <a class="nav-link" id="v-pills-history-tab" data-bs-toggle="pill" href="#v-pills-history"><i class="fa-solid fa-clock-rotate-left me-2"></i> Lịch sử</a>
+                <a class="nav-link" id="v-pills-students-tab" data-bs-toggle="pill" href="#v-pills-students"><i class="fa-solid fa-user-graduate me-2"></i> Sinh viên</a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-10 content-area">
+            
+            <div class="tab-content" id="v-pills-tabContent">
+                
+                <!-- Tab: Dashboard -->
+                <div class="tab-pane fade show active" id="v-pills-dashboard" role="tabpanel">
+                    <h2 class="mb-4">Tổng quan</h2>
+                    <div class="row">
+                        <div class="col-lg-6 col-6">
+                            <div class="card stat-card bg-gradient-primary">
+                                <div class="card-body py-4">
+                                    <h5 class="card-title">Tổng Sinh viên</h5>
+                                    <h2 class="display-4 fw-bold" id="stat-total-students">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 col-6">
+                            <div class="card stat-card bg-gradient-success">
+                                <div class="card-body py-4">
+                                    <h5 class="card-title">Điểm danh hôm nay</h5>
+                                    <h2 class="display-4 fw-bold" id="stat-today-attendance">0</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mt-2">
+                        <div class="card-header"><i class="fa-solid fa-chart-column me-1"></i> Biểu đồ điểm danh 7 ngày qua</div>
+                        <div class="card-body">
+                            <div style="position: relative; height: 250px; width: 100%">
+                                <canvas id="attendanceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Camera -->
+                <div class="tab-pane fade" id="v-pills-camera" role="tabpanel">
+                    <h2 class="mb-4">Camera AI Điểm danh</h2>
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <span><i class="fa-solid fa-video me-1"></i> Live Stream</span>
+                                    <span id="camera-status-badge" class="badge bg-secondary">OFF</span>
+                                </div>
+                                <div class="card-body text-center">
+                                    <div class="video-container">
+                                        <div id="video-placeholder" class="video-overlay">
+                                            <i class="fa-solid fa-video-slash fa-4x mb-3"></i>
+                                            <h5>Camera đang tắt</h5>
+                                            <p>Hãy bật camera để điểm danh</p>
+                                        </div>
+                                        <img id="video-stream" src="" alt="Live Stream" style="display:none;">
+                                    </div>
+                                    <div class="mt-3 gap-2 d-flex justify-content-center">
+                                        <button class="btn btn-success" id="btn-start-cam"><i class="fa-solid fa-play"></i> Bật Nhận Diện</button>
+                                        <button class="btn btn-danger" id="btn-stop-cam"><i class="fa-solid fa-stop"></i> Tắt Camera</button>
+                                        <button class="btn btn-warning" id="btn-train-model">
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="True"></span>
+                                            <span class="btn-text"><i class="fa-solid fa-brain"></i> Huấn luyện AI</span>
+                                        </button>
+                                    </div>
+                                    <p id="capture-status" class="mt-2 text-primary fw-bold" style="display:none;"></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header"><i class="fa-solid fa-list-check me-1"></i> Đã nhận diện (Realtime)</div>
+                                <div class="card-body p-0">
+                                    <ul class="list-group list-group-flush" id="live-logs-list">
+                                        <li class="list-group-item text-muted text-center py-4">Chưa có dữ liệu</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: History -->
+                <div class="tab-pane fade" id="v-pills-history" role="tabpanel">
+                    <h2 class="mb-4">Lịch sử Điểm danh</h2>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Chọn Ngày:</label>
+                                    <input type="date" class="form-control" id="history-date">
+                                </div>
+                                <div class="col-md-8 d-flex align-items-end">
+                                    <button class="btn btn-primary me-2" id="btn-fetch-history"><i class="fa-solid fa-magnifying-glass"></i> Xem Dữ Liệu</button>
+                                    <a href="#" class="btn btn-success" id="btn-export-excel"><i class="fa-solid fa-file-excel"></i> Xuất Excel</a>
+                                </div>
+                            </div>
+                            
+                            <table class="table table-striped table-hover mt-3">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Thời gian</th>
+                                        <th>MSSV</th>
+                                        <th>Họ và Tên</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-table-body">
+                                    <tr><td colspan="3" class="text-center text-muted">Chọn ngày để xem dữ liệu</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Students -->
+                <div class="tab-pane fade" id="v-pills-students" role="tabpanel">
+                    <h2 class="mb-4">Quản lý Sinh viên</h2>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-primary text-white"><i class="fa-solid fa-user-plus me-1"></i> Thêm Sinh Viên Mới</div>
+                                <div class="card-body">
+                                    <form id="add-student-form">
+                                        <div class="mb-3">
+                                            <label class="form-label">Họ và Tên</label>
+                                            <input type="text" class="form-control" id="new_name" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Mã Sinh Viên (MSSV)</label>
+                                            <input type="text" class="form-control" id="new_mssv" required>
+                                        </div>
+                                        <div class="alert alert-info py-2" role="alert">
+                                            <small><i class="fa-solid fa-info-circle"></i> Sau khi thêm, hệ thống sẽ tự động bật Camera để quét 50 góc mặt của bạn.</small>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100" id="btn-submit-student">
+                                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                            <span class="btn-text">Thêm & Quét Khuôn mặt</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card shadow-sm">
+                                <div class="card-header bg-dark text-white"><i class="fa-solid fa-users me-1"></i> Danh sách Sinh viên</div>
+                                <div class="card-body p-0">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Mã SV</th>
+                                                <th>Họ Tên</th>
+                                                <th>Ngày thêm</th>
+                                                <th>Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="students-table-body">
+                                            <!-- Data loads here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Custom Script for API logic -->
+<script>
+    let logInterval;
+    let statInterval;
+    let cameraMode = 'OFF';
+    
+    // Elements
+    const videoStream = document.getElementById('video-stream');
+    const videoPlaceholder = document.getElementById('video-placeholder');
+    const statusBadge = document.getElementById('camera-status-badge');
+    const captureStatus = document.getElementById('capture-status');
+    
+    // Set today for history date input
+    document.getElementById('history-date').valueAsDate = new Date();
+
+    // Chart Instance
+    let chartInstance = null;
+
+    // ----- DASHBOARD STATS & CHART -----
+    function loadStats() {
+        fetch('/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('stat-total-students').innerText = data.total_students;
+                document.getElementById('stat-today-attendance').innerText = data.today_attendance;
+                
+                // Render Chart
+                const ctx = document.getElementById('attendanceChart').getContext('2d');
+                const labels = data.chart_data.map(d => d.date);
+                const counts = data.chart_data.map(d => d.count);
+                
+                if(chartInstance) {
+                    chartInstance.data.labels = labels;
+                    chartInstance.data.datasets[0].data = counts;
+                    chartInstance.update();
+                } else {
+                    chartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Số Sinh viên',
+                                data: counts,
+                                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                                borderColor: 'rgba(54, 162, 235, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: { 
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true, ticks: {stepSize: 1} } } 
+                        }
+                    });
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    // ----- CAMERA CONTROL -----
+    function checkCameraStatus() {
+        if(cameraMode === 'OFF') return;
+        fetch('/api/camera/status')
+            .then(res => res.json())
+            .then(data => {
+                if(!data.running && cameraMode !== 'OFF') {
+                    // Camera stopped from backend (e.g. finished capturing)
+                    stopCameraUI();
+                    if(cameraMode === 'CAPTURE') {
+                        alert("Đã quét hình xong! Đang tự động huấn luyện AI...");
+                        document.getElementById('btn-train-model').click();
+                    }
+                } else if (data.mode === 'CAPTURE') {
+                    captureStatus.style.display = 'block';
+                    captureStatus.innerText = `Đang quét: ${data.capture_progress}/50... Hãy xoay mặt các góc độ.`;
+                }
+            });
+    }
+
+    function toggleCamera(action, mode='RECOGNIZE', student_id=null) {
+        fetch('/api/camera/toggle', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action, mode, student_id})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'started') {
+                cameraMode = mode;
+                videoStream.src = `/video_feed?t=${new Date().getTime()}`;
+                videoStream.style.display = 'block';
+                videoPlaceholder.style.display = 'none';
+                
+                statusBadge.innerText = mode === 'RECOGNIZE' ? 'ĐIỂM DANH' : 'CHỤP ẢNH';
+                statusBadge.className = 'badge bg-' + (mode === 'RECOGNIZE' ? 'success' : 'primary');
+                captureStatus.style.display = 'none';
+                
+                // Start tracking live logs if recognizing
+                if(mode === 'RECOGNIZE') {
+                    logInterval = setInterval(fetchLiveLogs, 2000);
+                }
+                setInterval(checkCameraStatus, 1000);
+            } else if (data.status === 'stopped') {
+                stopCameraUI();
+            }
+        });
+    }
+
+    function stopCameraUI() {
+        cameraMode = 'OFF';
+        videoStream.src = '';
+        videoStream.style.display = 'none';
+        videoPlaceholder.style.display = 'block';
+        statusBadge.innerText = 'OFF';
+        statusBadge.className = 'badge bg-secondary';
+        captureStatus.style.display = 'none';
+        if(logInterval) clearInterval(logInterval);
+    }
+
+    document.getElementById('btn-start-cam').addEventListener('click', () => toggleCamera('start', 'RECOGNIZE'));
+    document.getElementById('btn-stop-cam').addEventListener('click', stopCameraUI);
+
+    // ----- LIVE LOGS -----
+    function fetchLiveLogs() {
+        fetch('/api/attendance/logs')
+            .then(res => res.json())
+            .then(data => {
+                const list = document.getElementById('live-logs-list');
+                if(data.length === 0) {
+                    list.innerHTML = '<li class="list-group-item text-muted text-center py-4">Chưa có ai điểm danh</li>';
+                    return;
+                }
+                list.innerHTML = '';
+                data.forEach(log => {
+                    list.innerHTML += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div><strong>${log.name}</strong><br><small class="text-muted">${log.mssv}</small></div>
+                            <span class="badge bg-primary rounded-pill">${log.time}</span>
+                        </li>
+                    `;
+                });
+            });
+    }
+
+    // ----- TRAIN MODEL -----
+    document.getElementById('btn-train-model').addEventListener('click', function() {
+        this.classList.add('is-loading');
+        fetch('/api/train', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                this.classList.remove('is-loading');
+                alert(data.message);
+            })
+            .catch(err => {
+                this.classList.remove('is-loading');
+                alert("Lỗi huấn luyện!");
+                console.error(err);
+            });
+    });
+
+    // ----- STUDENTS TAB & ADD -----
+    function loadStudents() {
+        fetch('/api/students')
+            .then(res=>res.json())
+            .then(data => {
+                const tbody = document.getElementById('students-table-body');
+                tbody.innerHTML = '';
+                data.forEach(s => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${s.id}</td>
+                            <td>${s.mssv}</td>
+                            <td>${s.name}</td>
+                            <td>${new Date(s.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent(${s.id})" title="Xoá sinh viên">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+
+    document.getElementById('add-student-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-student');
+        btn.classList.add('is-loading');
+        
+        const name = document.getElementById('new_name').value;
+        const mssv = document.getElementById('new_mssv').value;
+
+        fetch('/api/students', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, mssv})
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.classList.remove('is-loading');
+            if(data.id) {
+                // Swith to Camera tab
+                document.getElementById('v-pills-camera-tab').click();
+                // Start capturing
+                toggleCamera('start', 'CAPTURE', data.id);
+                // Clear form & reload table
+                this.reset();
+                loadStudents();
+                loadStats();
+            } else {
+                alert("Lỗi: " + data.error);
+            }
+        });
+    });
+
+    function deleteStudent(id) {
+        if(confirm("Bạn có chắc chắn muốn xoá sinh viên này? Toàn bộ dữ liệu điểm danh cũng sẽ bị xoá.")) {
+            fetch(`/api/students/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if(data.message) {
+                    alert(data.message);
+                    loadStudents();
+                    loadStats();
+                    fetchHistory();
+                } else {
+                    alert("Lỗi: " + data.error);
+                }
+            });
+        }
+    }
+
+    // ----- HISTORY -----
+    function fetchHistory() {
+        const dateStr = document.getElementById('history-date').value;
+        if(!dateStr) return;
+        
+        // Update export Excel link
+        document.getElementById('btn-export-excel').href = `/api/export?date=${dateStr}`;
+        
+        fetch(`/api/attendance/date/${dateStr}`)
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById('history-table-body');
+                if(data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Chưa có ai điểm danh ngày này</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><span class="badge bg-secondary">${item.time}</span></td>
+                            <td><code>${item.mssv}</code></td>
+                            <td class="fw-bold">${item.name}</td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+    document.getElementById('btn-fetch-history').addEventListener('click', fetchHistory);
+
+    // Auto update stats/students on load
+    window.onload = () => {
+        loadStats();
+        statInterval = setInterval(loadStats, 10000); // refresh every 10s
+        loadStudents();
+        fetchHistory(); // fetch today
+        
+        // Update Excel button initial link
+        const d = document.getElementById('history-date').value;
+        document.getElementById('btn-export-excel').href = `/api/export?date=${d}`;
+    };
+
+</script>
+</body>
+</html>
